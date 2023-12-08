@@ -15,7 +15,7 @@ int read_msg(int sockfd, int client_sockfd) {
 	char buffer[256];
 	memset(buffer, '\0', sizeof(buffer));
 	int read_res = read(client_sockfd, buffer, sizeof(buffer));
-	if (read_res <= 0) {
+	if (read_res < 0) {
 		fprintf(stderr, "read failed\n");
 		return read_res;
 	}
@@ -93,7 +93,7 @@ int main(int argc, char ** argv) {
 		}
 
 		unsigned int current_nfds = nfds;
-		for (unsigned int i = 0; i < current_nfds; ++i) {
+		for (unsigned int i = 1; i < current_nfds; ++i) {
 			if (fds[i].revents == 0)
 				continue;
 
@@ -103,34 +103,33 @@ int main(int argc, char ** argv) {
 				break;
 			}
 
-			if (fds[i].fd == sockfd) {
-				printf("sockfd readable\n");
-				struct sockaddr_in client;
-				unsigned int clientaddrlen = sizeof(client);
-				int client_sockfd = accept(sockfd, (struct sockaddr *)&client, &clientaddrlen);
-				if (client_sockfd < 0) {
-					fprintf(stderr, "accept failed\n");
-					break;
-				}
-				printf("Server got connection from %s; fd: %d\n", inet_ntoa(client.sin_addr), client_sockfd);
-
-				fds[nfds].fd = client_sockfd;
-				fds[nfds].events = POLLIN;
-				++nfds;
-
-			} else {
-				printf("Descriptor %d is readable\n", fds[i].fd);
-				int read_res = read_msg(sockfd, fds[i].fd);
-				if (read_res < 0) {
-					printf("Connection fd: %d closed\n", fds[i].fd);
-					close(fds[i].fd);
-					fds[i].fd = -1;
-					compress_fds_array(fds, &nfds);
-				}
-				if (read_res == 0) {
-					running = 0;
-				}
+			printf("Descriptor %d is readable\n", fds[i].fd);
+			int read_res = read_msg(sockfd, fds[i].fd);
+			if (read_res < 0) {
+				printf("Connection fd: %d closed\n", fds[i].fd);
+				close(fds[i].fd);
+				fds[i].fd = -1;
+				compress_fds_array(fds, &nfds);
 			}
+			if (read_res == 0) {
+				running = 0;
+			}
+		}
+
+		if (fds[0].revents == POLLIN) {
+			printf("sockfd readable\n");
+			struct sockaddr_in client;
+			unsigned int clientaddrlen = sizeof(client);
+			int client_sockfd = accept(sockfd, (struct sockaddr *)&client, &clientaddrlen);
+			if (client_sockfd < 0) {
+				fprintf(stderr, "accept failed\n");
+				break;
+			}
+			printf("Server got connection from %s; fd: %d\n", inet_ntoa(client.sin_addr), client_sockfd);
+
+			fds[nfds].fd = client_sockfd;
+			fds[nfds].events = POLLIN;
+			++nfds;
 		}
 	}
 
