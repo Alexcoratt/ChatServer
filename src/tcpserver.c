@@ -20,7 +20,7 @@ void compress_fds_array(struct pollfd * fds, char ** names, unsigned int * nfds)
 				names[j] = names[j + 1];
 			}
 			--i;
-			--*nfds;
+			--(*nfds);
 		}
 	}
 }
@@ -31,6 +31,15 @@ void close_fds(struct pollfd * fds, char ** names, unsigned int nfds) {
 			close(fds[i].fd);
 			free(names[i]);
 		}
+}
+
+void close_connection(struct pollfd * fds, char ** names, unsigned int * nfds, unsigned int index) {
+	int fd = fds[index].fd;
+	close(fds[index].fd);
+	fds[index].fd = -1;
+	free(names[index]);
+	compress_fds_array(fds, names, nfds);
+	printf("Connection fd: %d closed\nnfds: %d\n", fd, *nfds);
 }
 
 int main(int argc, char ** argv) {
@@ -98,33 +107,30 @@ int main(int argc, char ** argv) {
 
 			printf("Descriptor %d is readable\nnfds: %d\n", fds[i].fd, nfds);
 
-			char buffer[256];
-			memset(buffer, '\0', sizeof(buffer));
-			if (read(fds[i].fd, buffer, sizeof(buffer)) <= 0) {
-				printf("Connection fd: %d closed\n", fds[i].fd);
-				close(fds[i].fd);
-				fds[i].fd = -1;
-				free(names[i]);
-				compress_fds_array(fds, names, &nfds);
-			}
+			char msg[128];
+			memset(msg, '\0', sizeof(msg));
+			if (read(fds[i].fd, msg, sizeof(msg)) <= 0)
+				close_connection(fds, names, &nfds, i);
 
-			if (strlen(buffer)) {
-				char msg[256];
-				memset(msg, '\0', sizeof(msg));
-				strcpy(msg, names[i]);
-				strcat(msg, ": ");
-				strcat(msg, buffer);
+			if (strlen(msg)) {
+				char buffer[256];
+				memset(buffer, '\0', sizeof(buffer));
+				strcpy(buffer, names[i]);
+				strcat(buffer, ": ");
+				strcat(buffer, msg);
 
 				for (unsigned int j = 1; j < nfds; ++j) {
 					if (j != i)
-						write(fds[j].fd, msg, sizeof(msg));
+						write(fds[j].fd, buffer, sizeof(buffer));
 				}
-				printf("%s\n", msg);
+				printf("%s\n", buffer);
 
 				// performing commands
-				if (buffer[0] == '/') {
-					if (strcmp(buffer, "/stop") == 0)
+				if (msg[0] == '/') {
+					if (strcmp(msg, "/stop") == 0)
 						running = 0;
+					else if (strcmp(msg, "/exit") == 0)
+						close_connection(fds, names, &nfds, i);
 				}
 			}
 		}
