@@ -10,11 +10,14 @@
 
 #include <poll.h>
 
-void compress_fds_array(struct pollfd * fds, unsigned int * nfds) {
+#define USER_COUNT 32
+
+void compress_fds_array(struct pollfd * fds, char ** names, unsigned int * nfds) {
 	for (unsigned int i = 0; i < *nfds; ++i) {
 		if (fds[i].fd == -1) {
 			for(unsigned int j = i; j < *nfds - 1; ++j) {
 				fds[j].fd = fds[j + 1].fd;
+				names[j] = names[j + 1];
 			}
 			--i;
 			--*nfds;
@@ -22,10 +25,12 @@ void compress_fds_array(struct pollfd * fds, unsigned int * nfds) {
 	}
 }
 
-void close_fds(struct pollfd * fds, unsigned int nfds) {
+void close_fds(struct pollfd * fds, char ** names, unsigned int nfds) {
 	for (unsigned int i = 0; i < nfds; ++i)
-		if (fds[i].fd >= 0)
+		if (fds[i].fd >= 0) {
 			close(fds[i].fd);
+			free(names[i]);
+		}
 }
 
 int main(int argc, char ** argv) {
@@ -51,17 +56,20 @@ int main(int argc, char ** argv) {
 		return -4;
 	}
 
-	if (listen(sockfd, 3) == -1) {
+	if (listen(sockfd, USER_COUNT - 1) == -1) {
 		fprintf(stderr, "listen failed\n");
 		close(sockfd);
 		return -5;
 	}
 
-	struct pollfd fds[32];
+	struct pollfd fds[USER_COUNT];
+	char * names[USER_COUNT];
 	unsigned int nfds = 1;
 	fds[0].fd = sockfd;
 	fds[0].events = POLLIN;
 	unsigned long timeout = 120000;
+	names[0] = malloc(7);
+	strcpy(names[0], "server");
 
 	int running = 1;
 	while (running) {
@@ -96,16 +104,28 @@ int main(int argc, char ** argv) {
 				printf("Connection fd: %d closed\n", fds[i].fd);
 				close(fds[i].fd);
 				fds[i].fd = -1;
-				compress_fds_array(fds, &nfds);
+				free(names[i]);
+				compress_fds_array(fds, names, &nfds);
 			}
 
 			if (strlen(buffer)) {
+				char msg[256];
+				memset(msg, '\0', sizeof(msg));
+				strcpy(msg, names[i]);
+				strcat(msg, ": ");
+				strcat(msg, buffer);
+
 				for (unsigned int j = 1; j < nfds; ++j) {
 					if (j != i)
-						write(fds[j].fd, buffer, sizeof(buffer));
+						write(fds[j].fd, msg, sizeof(msg));
 				}
-				printf("%s\n", buffer);
-				running = strcmp(buffer, "/stop");
+				printf("%s\n", msg);
+
+				// performing commands
+				if (buffer[0] == '/') {
+					if (strcmp(buffer, "/stop") == 0)
+						running = 0;
+				}
 			}
 		}
 
@@ -122,12 +142,21 @@ int main(int argc, char ** argv) {
 
 			fds[nfds].fd = client_sockfd;
 			fds[nfds].events = POLLIN;
+
+			char new_name[8] = "user";
+			char user_num[3];
+			sprintf(user_num, "%d", nfds);
+			strcat(new_name, user_num);
+
+			names[nfds] = malloc(16);
+			strcpy(names[nfds], new_name);
+
 			++nfds;
 		}
 	}
 
 	//close(sockfd);
-	close_fds(fds, nfds);
+	close_fds(fds, names, nfds);
 
 	return 0;
 }
