@@ -14,7 +14,6 @@ int loop(int sockfd) {
 		memset(buffer, '\0', sizeof(buffer));
 		printf("Message: ");
 		scanf("%s", buffer);
-		printf("buffer: %s\n", buffer);
 		if (write(sockfd, buffer, sizeof(buffer)) == -1) {
 			fprintf(stderr, "write failed\n");
 			close(sockfd);

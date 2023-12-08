@@ -8,18 +8,16 @@
 #include <netdb.h>
 #include <arpa/inet.h>
 
-int loop(int sockfd, int client_sockfd, struct sockaddr_in * client) {
+int loop(int sockfd, int client_sockfd) {
 	char buffer[256];
 	do {
 		memset(buffer, '\0', sizeof(buffer));
 		if (read(client_sockfd, buffer, sizeof(buffer)) <= 0) {
 			fprintf(stderr, "read failed\n");
-			close(sockfd);
 			return -7;
 		}
 
 		printf("%s\n", buffer);
-		printf("%s\n", inet_ntoa(client->sin_addr));
 	} while (strcmp(buffer, "/stop"));
 
 	return 0;
@@ -54,16 +52,23 @@ int main(int argc, char ** argv) {
 		return -5;
 	}
 
-	struct sockaddr_in client;
-	unsigned int clientaddrlen = sizeof(client);
-	int client_sockfd = accept(sockfd, (struct sockaddr *)&client, &clientaddrlen);
-	if (client_sockfd < 0) {
-		fprintf(stderr, "accept failed\n");
-		close(sockfd);
-		return -6;
-	}
 
-	int res = loop(sockfd, client_sockfd, &client);
+
+	int res = 0;
+	do {
+		struct sockaddr_in client;
+		unsigned int clientaddrlen = sizeof(client);
+		int client_sockfd = accept(sockfd, (struct sockaddr *)&client, &clientaddrlen);
+		if (client_sockfd < 0) {
+			fprintf(stderr, "accept failed\n");
+			break;
+		}
+		printf("Server got connection from %s\n", inet_ntoa(client.sin_addr));
+
+		res = loop(sockfd, client_sockfd);
+		close(client_sockfd);
+	} while (res != 0);
+
 	close(sockfd);
 
 	return res;
