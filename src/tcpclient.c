@@ -7,19 +7,27 @@
 #include <netdb.h>
 #include <netinet/in.h>
 
+// TODO: use select of poll to parallel sending and receiving messages processes
 int loop(int sockfd) {
-	char buffer[256] = "";
-
-	do {
-		memset(buffer, '\0', sizeof(buffer));
+	char running = 1;
+	while (running) {
+		char buffer[256] = "";
 		printf("Message: ");
 		scanf("%s", buffer);
+		printf("buffer: %s\n", buffer);
 
 		if (write(sockfd, buffer, sizeof(buffer)) == -1) {
 			fprintf(stderr, "write failed\n");
 			return -5;
 		}
-	} while (strcmp(buffer, "/exit"));
+
+		char answer[256] = "";
+		if (read(sockfd, answer, sizeof(answer)) <= 0)
+			fprintf(stderr, "read failed\n");
+
+		printf("Server: %s\n", answer);
+		running = strcmp(buffer, "/exit");
+	};
 
 	return 0;
 }

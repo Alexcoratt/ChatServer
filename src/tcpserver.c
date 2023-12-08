@@ -10,20 +10,6 @@
 
 #include <poll.h>
 
-// TODO: must use poll to serve multiple connections at the same time
-int read_msg(int sockfd, int client_sockfd) {
-	char buffer[256];
-	memset(buffer, '\0', sizeof(buffer));
-	int read_res = read(client_sockfd, buffer, sizeof(buffer));
-	if (read_res < 0) {
-		fprintf(stderr, "read failed\n");
-		return read_res;
-	}
-
-	printf("%s\n", buffer);
-	return strcmp(buffer, "/stop");
-}
-
 void compress_fds_array(struct pollfd * fds, unsigned int * nfds) {
 	for (unsigned int i = 0; i < *nfds; ++i) {
 		if (fds[i].fd == -1) {
@@ -92,8 +78,7 @@ int main(int argc, char ** argv) {
 			break;
 		}
 
-		unsigned int current_nfds = nfds;
-		for (unsigned int i = 1; i < current_nfds; ++i) {
+		for (unsigned int i = 1; i < nfds; ++i) {
 			if (fds[i].revents == 0)
 				continue;
 
@@ -103,16 +88,24 @@ int main(int argc, char ** argv) {
 				break;
 			}
 
-			printf("Descriptor %d is readable\n", fds[i].fd);
-			int read_res = read_msg(sockfd, fds[i].fd);
-			if (read_res < 0) {
+			printf("Descriptor %d is readable\nnfds: %d\n", fds[i].fd, nfds);
+
+			char buffer[256];
+			memset(buffer, '\0', sizeof(buffer));
+			if (read(fds[i].fd, buffer, sizeof(buffer)) <= 0) {
 				printf("Connection fd: %d closed\n", fds[i].fd);
 				close(fds[i].fd);
 				fds[i].fd = -1;
 				compress_fds_array(fds, &nfds);
 			}
-			if (read_res == 0) {
-				running = 0;
+
+			if (strlen(buffer)) {
+				for (unsigned int j = 1; j < nfds; ++j) {
+					if (j != i)
+						write(fds[j].fd, buffer, sizeof(buffer));
+				}
+				printf("%s\n", buffer);
+				running = strcmp(buffer, "/stop");
 			}
 		}
 
