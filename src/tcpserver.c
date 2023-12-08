@@ -8,19 +8,16 @@
 #include <netdb.h>
 #include <arpa/inet.h>
 
-int loop(int sockfd, int client_sockfd) {
+int read_msg(int sockfd, int client_sockfd) {
 	char buffer[256];
-	do {
-		memset(buffer, '\0', sizeof(buffer));
-		if (read(client_sockfd, buffer, sizeof(buffer)) <= 0) {
-			fprintf(stderr, "read failed\n");
-			return -7;
-		}
+	memset(buffer, '\0', sizeof(buffer));
+	if (read(client_sockfd, buffer, sizeof(buffer)) <= 0) {
+		fprintf(stderr, "read failed\n");
+		return -7;
+	}
 
-		printf("%s\n", buffer);
-	} while (strcmp(buffer, "/stop"));
-
-	return 0;
+	printf("%s\n", buffer);
+	return strcmp(buffer, "/stop");
 }
 
 int main(int argc, char ** argv) {
@@ -52,8 +49,6 @@ int main(int argc, char ** argv) {
 		return -5;
 	}
 
-
-
 	int res = 0;
 	do {
 		struct sockaddr_in client;
@@ -65,7 +60,7 @@ int main(int argc, char ** argv) {
 		}
 		printf("Server got connection from %s\n", inet_ntoa(client.sin_addr));
 
-		res = loop(sockfd, client_sockfd);
+		res = read_msg(sockfd, client_sockfd);
 		close(client_sockfd);
 	} while (res != 0);
 
