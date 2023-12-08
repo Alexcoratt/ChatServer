@@ -7,21 +7,10 @@
 #include <netdb.h>
 #include <netinet/in.h>
 
-int loop(struct sockaddr_in * server) {
+int loop(int sockfd) {
 	char buffer[256] = "";
 
 	do {
-		int sockfd = socket(AF_INET, SOCK_STREAM, 0);
-		if (sockfd == -1) {
-			fprintf(stderr, "socket failed\n");
-			return -2;
-		}
-
-		if (connect(sockfd, (struct sockaddr *)server, sizeof(*server)) == -1) {
-			fprintf(stderr, "connect failed\n");
-			return -4;
-		}
-
 		memset(buffer, '\0', sizeof(buffer));
 		printf("Message: ");
 		scanf("%s", buffer);
@@ -30,8 +19,6 @@ int loop(struct sockaddr_in * server) {
 			fprintf(stderr, "write failed\n");
 			return -5;
 		}
-
-		close(sockfd);
 	} while (strcmp(buffer, "/exit"));
 
 	return 0;
@@ -54,7 +41,20 @@ int main(int argc, char ** argv) {
 	server.sin_port = htons(atoi(argv[2]));
 	server.sin_addr.s_addr = *(unsigned long *)hostname->h_addr;
 
-	int res = loop(&server);
+
+	int sockfd = socket(AF_INET, SOCK_STREAM, 0);
+	if (sockfd == -1) {
+		fprintf(stderr, "socket failed\n");
+		return -2;
+	}
+
+	if (connect(sockfd, (struct sockaddr *)&server, sizeof(server)) == -1) {
+		fprintf(stderr, "connect failed\n");
+		return -4;
+	}
+
+	int res = loop(sockfd);
+	close(sockfd);
 	printf("Finished\n");
 
 	return res;
